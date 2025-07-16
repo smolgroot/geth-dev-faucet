@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
   Card,
   CardContent,
@@ -11,8 +11,11 @@ import {
   CircularProgress,
   Chip,
   Divider,
+  Avatar,
+  Fade,
+  InputAdornment,
 } from '@mui/material'
-import { WaterDrop, Send, Cable } from '@mui/icons-material'
+import { WaterDrop, Send, Cable, Person, Search } from '@mui/icons-material'
 import confetti from 'canvas-confetti'
 import { ethers } from 'ethers'
 
@@ -22,12 +25,22 @@ interface TransactionResult {
   txHash?: string
 }
 
+interface ENSProfile {
+  address: string
+  avatar?: string
+  displayName?: string
+  description?: string
+}
+
 const FaucetApp: React.FC = () => {
   const [address, setAddress] = useState('')
   const [amount, setAmount] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<TransactionResult | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [ensProfile, setEnsProfile] = useState<ENSProfile | null>(null)
+  const [isResolvingENS, setIsResolvingENS] = useState(false)
+  const [ensError, setEnsError] = useState<string | null>(null)
 
   // Validate Ethereum address
   const isValidAddress = (addr: string): boolean => {
@@ -36,6 +49,165 @@ const FaucetApp: React.FC = () => {
     } catch {
       return false
     }
+  }
+
+  // Check if input is an ENS name
+  const isENSName = (input: string): boolean => {
+    return input.endsWith('.eth') && input.length > 4
+  }
+
+  // Resolve ENS name and get profile
+  const resolveENS = async (ensName: string) => {
+    setIsResolvingENS(true)
+    setEnsError(null)
+    setEnsProfile(null)
+
+    try {
+      // For ENS resolution, we MUST use mainnet - ENS contracts don't exist on local networks
+      // Using multiple fallback providers for better reliability
+      const providers = [
+        'https://cloudflare-eth.com',
+        'https://eth.llamarpc.com',
+        'https://1rpc.io/eth'
+      ]
+      
+      let mainnetProvider: ethers.JsonRpcProvider | null = null
+      let resolvedAddress: string | null = null
+      
+      // Try providers until one works
+      for (const providerUrl of providers) {
+        try {
+          mainnetProvider = new ethers.JsonRpcProvider(providerUrl)
+          
+          // Test connection and resolve ENS name
+          await mainnetProvider.getNetwork() // Test connection
+          resolvedAddress = await mainnetProvider.resolveName(ensName)
+          
+          if (resolvedAddress) {
+            break // Success, exit loop
+          }
+        } catch (error) {
+          console.log(`Provider ${providerUrl} failed, trying next...`, error)
+          continue
+        }
+      }
+      
+      if (!mainnetProvider || !resolvedAddress) {
+        throw new Error(`Could not resolve ENS name: ${ensName}. Make sure you have internet connectivity.`)
+      }
+
+      // Get ENS profile data
+      const resolver = await mainnetProvider.getResolver(ensName)
+      
+      const profile: ENSProfile = {
+        address: resolvedAddress,
+      }
+
+      if (resolver) {
+        // Get avatar with better error handling
+        try {
+          const avatar = await resolver.getAvatar()
+          if (avatar) {
+            Object.assign(profile, { avatar: avatar.toString() })
+          }
+        } catch (error) {
+          console.log('No avatar found or error retrieving avatar:', error)
+        }
+
+        // Get display name
+        try {
+          const displayName = await resolver.getText('display')
+          if (displayName) {
+            Object.assign(profile, { displayName })
+          }
+        } catch (error) {
+          console.log('No display name found:', error)
+        }
+
+        // Get description
+        try {
+          const description = await resolver.getText('description')
+          if (description) {
+            Object.assign(profile, { description })
+          }
+        } catch (error) {
+          console.log('No description found:', error)
+        }
+      }
+
+      setEnsProfile(profile)
+      // Don't automatically set the address to resolved address, 
+      // keep the original ENS name in the input for better UX
+      
+    } catch (error) {
+      let errorMessage = 'Failed to resolve ENS name'
+      
+      if (error instanceof Error) {
+        if (error.message.includes('missing revert data') || error.message.includes('CALL_EXCEPTION')) {
+          errorMessage = 'ENS resolution requires internet connection to mainnet. Please check your connection.'
+        } else if (error.message.includes('network')) {
+          errorMessage = 'Network error: Unable to connect to Ethereum mainnet for ENS resolution.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      setEnsError(errorMessage)
+      console.error('ENS resolution error:', error)
+    } finally {
+      setIsResolvingENS(false)
+    }
+  }
+
+  // Handle address input change with ENS resolution
+  useEffect(() => {
+    if (isENSName(address)) {
+      const timeoutId = setTimeout(() => {
+        resolveENS(address)
+      }, 800)
+      
+      return () => clearTimeout(timeoutId)
+    } else {
+      setEnsProfile(null)
+      setEnsError(null)
+    }
+  }, [address])
+
+  // Handle address input change
+  const handleAddressChange = (value: string) => {
+    setAddress(value)
+    setEnsProfile(null)
+    setEnsError(null)
+  }
+
+  // Enhanced address validation that considers ENS
+  const isValidInput = (input: string): boolean => {
+    if (input === '') return false
+    
+    // If it's a regular address, validate it
+    if (isValidAddress(input)) return true
+    
+    // If it's an ENS name, check if we have a resolved profile or if it's still resolving
+    if (isENSName(input)) {
+      return true // Allow ENS names even if not yet resolved
+    }
+    
+    return false
+  }
+
+  // Check if we can proceed with transaction
+  const canSendTransaction = (): boolean => {
+    if (!address) return false
+    
+    // If it's a regular address, we're good
+    if (isValidAddress(address)) return true
+    
+    // If it's an ENS name, we need a successful resolution
+    if (isENSName(address)) {
+      return !!ensProfile && !ensError && !isResolvingENS
+    }
+    
+    return false
   }
 
   // Trigger confetti animation
@@ -74,10 +246,13 @@ const FaucetApp: React.FC = () => {
 
   // Send ETH transaction
   const sendETH = async () => {
-    if (!isValidAddress(address)) {
+    // Use the resolved address from ENS profile, or the input address if it's a regular address
+    const targetAddress = ensProfile?.address || (isValidAddress(address) ? address : '')
+    
+    if (!isValidAddress(targetAddress)) {
       setResult({
         success: false,
-        message: 'Please enter a valid Ethereum address',
+        message: 'Please enter a valid Ethereum address or resolve a valid ENS name first',
       })
       return
     }
@@ -107,7 +282,7 @@ const FaucetApp: React.FC = () => {
 
       // Prepare transaction
       const tx = {
-        to: address,
+        to: targetAddress,
         value: ethers.parseEther(amount.toString()),
       }
 
@@ -118,9 +293,13 @@ const FaucetApp: React.FC = () => {
       const receipt = await transaction.wait()
       
       if (receipt && receipt.status === 1) {
+        // Display name priority: ENS display name > ENS input > shortened address
+        const recipientDisplay = ensProfile?.displayName || 
+                                (address.endsWith('.eth') ? address : `${targetAddress.slice(0, 6)}...${targetAddress.slice(-4)}`)
+        
         setResult({
           success: true,
-          message: `Successfully sent ${amount} ETH to ${address}`,
+          message: `Successfully sent ${amount} ETH to ${recipientDisplay}`,
           txHash: transaction.hash,
         })
         triggerConfetti()
@@ -181,24 +360,80 @@ const FaucetApp: React.FC = () => {
         <CardContent sx={{ p: 4 }}>
           <Box sx={{ mb: 4 }}>
             <Typography variant="h6" gutterBottom>
-              Recipient Address
+              Recipient Address or ENS Name
             </Typography>
+            
+            {/* ENS Profile Display */}
+            {ensProfile && (
+              <Fade in={true}>
+                <Box sx={{ 
+                  mb: 2, 
+                  p: 2, 
+                  bgcolor: 'rgba(0, 210, 255, 0.1)', 
+                  borderRadius: 2,
+                  border: '1px solid rgba(0, 210, 255, 0.3)'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Avatar 
+                      src={ensProfile.avatar} 
+                      sx={{ width: 48, height: 48 }}
+                    >
+                      <Person />
+                    </Avatar>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {ensProfile.displayName || address}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ 
+                        fontFamily: 'monospace',
+                        fontSize: '0.8rem'
+                      }}>
+                        {ensProfile.address}
+                      </Typography>
+                      {ensProfile.description && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {ensProfile.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+              </Fade>
+            )}
+
             <TextField
               fullWidth
-              placeholder="0x742d35Cc6634C0532925a3b8D62B8bDD65b9b22d"
+              placeholder="0x742d35Cc6634C0532925a3b8D62B8bDD65b9b22d or vitalik.eth"
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              error={address !== '' && !isValidAddress(address)}
+              onChange={(e) => handleAddressChange(e.target.value)}
+              error={(address !== '' && !isValidInput(address)) || !!ensError}
               helperText={
-                address !== '' && !isValidAddress(address)
-                  ? 'Please enter a valid Ethereum address'
-                  : 'Enter the Ethereum address to receive ETH'
+                ensError ? `ENS Error: ${ensError}` :
+                isResolvingENS ? 'Resolving ENS name...' :
+                (address !== '' && !isValidInput(address))
+                  ? 'Please enter a valid Ethereum address or ENS name (.eth)'
+                  : ensProfile
+                    ? `✅ ENS resolved to ${ensProfile.address.slice(0, 6)}...${ensProfile.address.slice(-4)}`
+                    : 'Enter the Ethereum address or ENS name (.eth) to receive ETH'
               }
               InputProps={{
                 sx: {
                   fontFamily: 'monospace',
                   fontSize: '0.9rem',
                 },
+                endAdornment: isResolvingENS ? (
+                  <InputAdornment position="end">
+                    <CircularProgress size={20} />
+                  </InputAdornment>
+                ) : isENSName(address) && ensProfile ? (
+                  <InputAdornment position="end">
+                    <Search color="success" />
+                  </InputAdornment>
+                ) : isENSName(address) ? (
+                  <InputAdornment position="end">
+                    <Search color="primary" />
+                  </InputAdornment>
+                ) : undefined,
               }}
             />
           </Box>
@@ -267,7 +502,7 @@ const FaucetApp: React.FC = () => {
             size="large"
             startIcon={isLoading ? <CircularProgress size={20} /> : <Send />}
             onClick={sendETH}
-            disabled={isLoading || !isValidAddress(address)}
+            disabled={isLoading || !canSendTransaction()}
             sx={{
               py: 2,
               fontSize: '1.1rem',
@@ -319,6 +554,10 @@ const FaucetApp: React.FC = () => {
 
       {/* Footer */}
       <Box sx={{ textAlign: 'center', mt: 4 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          ✨ <strong>ENS Support:</strong> You can enter .eth domain names like "vitalik.eth" <br />
+          The faucet will automatically resolve them and show profile information
+        </Typography>
         <Typography variant="body2" color="text.secondary">
           Make sure your local geth instance is running with: <br />
           <code style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '4px 8px', borderRadius: '4px' }}>
