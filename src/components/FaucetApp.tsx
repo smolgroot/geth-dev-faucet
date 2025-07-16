@@ -14,8 +14,14 @@ import {
   Avatar,
   Fade,
   InputAdornment,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tooltip,
 } from '@mui/material'
-import { WaterDrop, Send, Cable, Person, Search } from '@mui/icons-material'
+import { WaterDrop, Send, Cable, Person, Search, Settings, Save, RestartAlt } from '@mui/icons-material'
 import confetti from 'canvas-confetti'
 import { ethers } from 'ethers'
 
@@ -41,6 +47,39 @@ const FaucetApp: React.FC = () => {
   const [ensProfile, setEnsProfile] = useState<ENSProfile | null>(null)
   const [isResolvingENS, setIsResolvingENS] = useState(false)
   const [ensError, setEnsError] = useState<string | null>(null)
+  
+  // RPC Settings
+  const [rpcHost, setRpcHost] = useState('localhost')
+  const [rpcPort, setRpcPort] = useState('8545')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [tempRpcHost, setTempRpcHost] = useState('localhost')
+  const [tempRpcPort, setTempRpcPort] = useState('8545')
+  
+  // Get current RPC URL
+  const getRpcUrl = () => `http://${rpcHost}:${rpcPort}`
+
+  // Settings functions
+  const handleSettingsOpen = () => {
+    setTempRpcHost(rpcHost)
+    setTempRpcPort(rpcPort)
+    setSettingsOpen(true)
+  }
+
+  const handleSettingsClose = () => {
+    setSettingsOpen(false)
+  }
+
+  const handleSettingsSave = () => {
+    setRpcHost(tempRpcHost)
+    setRpcPort(tempRpcPort)
+    setIsConnected(false) // Reset connection status
+    setSettingsOpen(false)
+  }
+
+  const handleSettingsReset = () => {
+    setTempRpcHost('localhost')
+    setTempRpcPort('8545')
+  }
 
   // Validate Ethereum address
   const isValidAddress = (addr: string): boolean => {
@@ -261,8 +300,8 @@ const FaucetApp: React.FC = () => {
     setResult(null)
 
     try {
-      // Connect to local geth instance
-      const provider = new ethers.JsonRpcProvider('http://localhost:8545')
+      // Connect to local geth instance using configurable RPC
+      const provider = new ethers.JsonRpcProvider(getRpcUrl())
       
       // Get the default account (first account in geth --dev)
       const accounts = await provider.listAccounts()
@@ -331,7 +370,7 @@ const FaucetApp: React.FC = () => {
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       {/* Header */}
       <Box sx={{ textAlign: 'center', mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2, position: 'relative' }}>
           <WaterDrop sx={{ fontSize: 48, color: 'primary.main', mr: 1 }} />
           <Typography variant="h3" component="h1" sx={{ 
             background: 'linear-gradient(45deg, #00d2ff 30%, #ff6b6b 90%)',
@@ -339,16 +378,34 @@ const FaucetApp: React.FC = () => {
             WebkitBackgroundClip: 'text',
             color: 'transparent',
           }}>
-            ETH Faucet
+            Local GETH Faucet
           </Typography>
+          
+          {/* Settings Button */}
+          <Tooltip title="RPC Settings">
+            <IconButton
+              onClick={handleSettingsOpen}
+              sx={{
+                position: 'absolute',
+                right: 0,
+                color: 'text.secondary',
+                '&:hover': {
+                  color: 'primary.main',
+                  backgroundColor: 'rgba(0, 210, 255, 0.1)',
+                },
+              }}
+            >
+              <Settings />
+            </IconButton>
+          </Tooltip>
         </Box>
         <Typography variant="h6" color="text.secondary">
           Get free ETH for development on your local testnet
         </Typography>
         <Box sx={{ mt: 2 }}>
           <Chip
-            icon={<Cable    />}
-            label={isConnected ? 'Connected to Local Geth' : 'Not Connected'}
+            icon={<Cable />}
+            label={isConnected ? `Connected to ${rpcHost}:${rpcPort}` : `Not Connected (${rpcHost}:${rpcPort})`}
             color={isConnected ? 'success' : 'warning'}
             variant="outlined"
           />
@@ -552,18 +609,141 @@ const FaucetApp: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Settings Modal */}
+      <Dialog open={settingsOpen} onClose={handleSettingsClose} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          background: 'linear-gradient(45deg, #00d2ff 30%, #0099cc 90%)',
+          color: 'white'
+        }}>
+          <Settings />
+          RPC Settings
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3, mt: 5, mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Configure the RPC endpoint for your local geth instance. Default is localhost:8545.
+          </Typography>
+          
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField
+              label="Host"
+              value={tempRpcHost}
+              onChange={(e) => setTempRpcHost(e.target.value)}
+              fullWidth
+              placeholder="localhost"
+              helperText="Hostname or IP address"
+            />
+            <TextField
+              label="Port"
+              value={tempRpcPort}
+              onChange={(e) => setTempRpcPort(e.target.value)}
+              type="number"
+              sx={{ minWidth: 120 }}
+              placeholder="8545"
+              helperText="Port number"
+            />
+          </Box>
+          
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              <strong>Current URL:</strong> {`http://${tempRpcHost}:${tempRpcPort}`}
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            onClick={handleSettingsReset} 
+            startIcon={<RestartAlt />}
+            variant="outlined"
+          >
+            Reset to Default
+          </Button>
+          <Button onClick={handleSettingsClose}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSettingsSave} 
+            variant="contained" 
+            startIcon={<Save />}
+          >
+            Save Settings
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Footer */}
-      <Box sx={{ textAlign: 'center', mt: 4 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Box sx={{ textAlign: 'center', mt: 4, maxWidth: 800, mx: 'auto' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           ✨ <strong>ENS Support:</strong> You can enter .eth domain names like "vitalik.eth" <br />
           The faucet will automatically resolve them and show profile information
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Make sure your local geth instance is running with: <br />
-          <code style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '4px 8px', borderRadius: '4px' }}>
-            geth --dev --http --http.api eth,web3,personal --http.corsdomain "*"
-          </code>
-        </Typography>
+        
+        {/* Code Block */}
+        <Box sx={{ 
+          bgcolor: '#1e1e1e',
+          borderRadius: 2,
+          p: 3,
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          textAlign: 'left',
+          fontFamily: 'monospace',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          <Typography variant="body2" sx={{ 
+            color: '#569cd6', 
+            mb: 1,
+            fontWeight: 600
+          }}>
+            🚀 Start your local geth instance:
+          </Typography>
+          
+          <Box sx={{ 
+            bgcolor: '#0d1117',
+            p: 2,
+            borderRadius: 1,
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            position: 'relative'
+          }}>
+            <Typography component="pre" sx={{ 
+              m: 0,
+              fontSize: '0.85rem',
+              lineHeight: 1.5,
+              color: '#e6edf3',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all'
+            }}>
+              <Box component="span" sx={{ color: '#f85149' }}>geth</Box>{' '}
+              <Box component="span" sx={{ color: '#79c0ff' }}>--dev</Box>{' '}
+              <Box component="span" sx={{ color: '#79c0ff' }}>--http</Box>{' '}
+              <Box component="span" sx={{ color: '#79c0ff' }}>--http.api</Box>{' '}
+              <Box component="span" sx={{ color: '#a5d6ff' }}>eth,web3,personal</Box>{' '}
+              <Box component="span" sx={{ color: '#79c0ff' }}>--http.corsdomain</Box>{' '}
+              <Box component="span" sx={{ color: '#a5d6ff' }}>"*"</Box>
+            </Typography>
+            
+            {/* Copy button would go here in a real implementation */}
+            <Box sx={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              opacity: 0.7,
+              fontSize: '0.7rem',
+              color: '#7d8590'
+            }}>
+              bash
+            </Box>
+          </Box>
+          
+          <Typography variant="body2" sx={{ 
+            color: '#7d8590',
+            mt: 2,
+            fontSize: '0.8rem'
+          }}>
+            💡 This starts geth in development mode with pre-funded accounts and CORS enabled for web3 access.
+          </Typography>
+        </Box>
       </Box>
     </Box>
   )

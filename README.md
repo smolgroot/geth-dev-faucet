@@ -1,4 +1,16 @@
-# ETH Faucet - Local Development Tool
+# ET## ✨ Features
+
+- 🎨 **Modern UI**: Beautiful Material-UI interface with dark theme and gradients
+- 🔗 **Ethereum Integration**: Direct connection to local geth instance via ethers.js
+- 🌐 **ENS Support**: Resolve .eth domain names with profile information display
+- 👤 **Profile Pictures**: Automatic display of ENS avatar and profile metadata
+- ⚙️ **Configurable RPC**: Settings modal to customize RPC host and port
+- 🎯 **Address Validation**: Real-time Ethereum address and ENS name validation
+- 📊 **Flexible Amounts**: Slider to select ETH amounts from 0.1 to 10 ETH
+- 🎉 **Success Animations**: Confetti celebration on successful transactions
+- 📱 **Responsive Design**: Works great on desktop and mobile devices
+- 🚀 **SEO Optimized**: Complete meta tags, Twitter cards, and custom favicon
+- ⚡ **Fast Development**: Built with Vite for lightning-fast development experienceLocal Development Tool
 
 A beautiful and modern Ethereum faucet application built with React, TypeScript, Material-UI, and Vite. This tool allows you to easily distribute ETH from your local geth development instance to any Ethereum address.
 
@@ -59,14 +71,21 @@ The application will be available at `http://localhost:5173`
    - Display the ENS profile picture (avatar) if available
    - Show the display name and description from ENS metadata
 3. **Select Amount**: Use the slider to choose between 0.1 and 10 ETH
-4. **Send ETH**: Click the "Send ETH" button to initiate the transaction
-5. **Celebrate**: Watch the confetti animation on successful transactions! 🎉
+4. **Configure RPC** (Optional): Click the settings ⚙️ button to customize RPC endpoint
+5. **Send ETH**: Click the "Send ETH" button to initiate the transaction
+6. **Celebrate**: Watch the confetti animation on successful transactions! 🎉
 
 ### ENS Examples to Try
 - `vitalik.eth` - Vitalik Buterin's ENS
 - `ens.eth` - Official ENS domain
 - `nick.eth` - Nick Johnson (ENS creator)
 - Any other .eth domain you know!
+
+### RPC Configuration
+- Click the ⚙️ settings icon in the top-right corner
+- Customize the host and port for your geth instance
+- Default: `localhost:8545`
+- Supports any host/port combination
 
 ## 🏗️ Technology Stack
 
