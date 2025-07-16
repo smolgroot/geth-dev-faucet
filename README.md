@@ -1,32 +1,34 @@
-# ET## ✨ Features
+# Geth Dev Faucet
 
-- 🎨 **Modern UI**: Beautiful Material-UI interface with dark theme and gradients
-- 🔗 **Ethereum Integration**: Direct connection to local geth instance via ethers.js
-- 🌐 **ENS Support**: Resolve .eth domain names with profile information display
-- 👤 **Profile Pictures**: Automatic display of ENS avatar and profile metadata
-- ⚙️ **Configurable RPC**: Settings modal to customize RPC host and port
-- 🎯 **Address Validation**: Real-time Ethereum address and ENS name validation
-- 📊 **Flexible Amounts**: Slider to select ETH amounts from 0.1 to 10 ETH
-- 🎉 **Success Animations**: Confetti celebration on successful transactions
-- 📱 **Responsive Design**: Works great on desktop and mobile devices
-- 🚀 **SEO Optimized**: Complete meta tags, Twitter cards, and custom favicon
-- ⚡ **Fast Development**: Built with Vite for lightning-fast development experienceLocal Development Tool
+A beautiful and modern Go-Ethereum faucet application built with React, TypeScript, Material-UI, and Vite. This tool allows you to easily distribute ETH from your local geth development instance to any Ethereum address.
 
-A beautiful and modern Ethereum faucet application built with React, TypeScript, Material-UI, and Vite. This tool allows you to easily distribute ETH from your local geth development instance to any Ethereum address.
+<table>
+  <tr>
+    <td align="center">
+      <img src="./screenshots/image2.png" alt="Main Interface" width="250"/>
+      <br />
+      <strong>Main Interface</strong>
+      <br />
+      <em>Clean faucet interface with connection status to your local RPC</em>
+    </td>
+    <td align="center">
+      <img src="./screenshots/image1.png" alt="ENS Support" width="250"/>
+      <br />
+      <strong>ENS Support</strong>
+      <br />
+      <em>ENS compliant app, even on your local testnet.</em>
+    </td>
+    <td align="center">
+      <img src="./screenshots/image3.png" alt="RPC Settings" width="250"/>
+      <br />
+      <strong>RPC Settings</strong>
+      <br />
+      <em>Configure connection with network presets</em>
+    </td>
+  </tr>
+</table>
 
-## ✨ Features
-
-- 🎨 **Modern UI**: Beautiful Material-UI interface with dark theme and gradients
-- 🔗 **Ethereum Integration**: Direct connection to local geth instance via ethers.js
-- � **ENS Support**: Resolve .eth domain names with profile information display
-- 👤 **Profile Pictures**: Automatic display of ENS avatar and profile metadata
-- �🎯 **Address Validation**: Real-time Ethereum address and ENS name validation
-- 📊 **Flexible Amounts**: Slider to select ETH amounts from 0.1 to 10 ETH
-- 🎉 **Success Animations**: Confetti celebration on successful transactions
-- 📱 **Responsive Design**: Works great on desktop and mobile devices
-- ⚡ **Fast Development**: Built with Vite for lightning-fast development experience
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -44,13 +46,13 @@ npm install
 Start your local Ethereum development node:
 
 ```bash
-geth --dev --http --http.api eth,web3,personal --http.corsdomain "*"
+geth --dev --http --http.api eth,web3,dev --http.corsdomain "*"
 ```
 
 This command:
 - `--dev`: Runs in development mode with pre-funded accounts
 - `--http`: Enables HTTP-RPC server
-- `--http.api eth,web3,personal`: Enables required APIs
+- `--http.api eth,web3,dev`: Enables required APIs
 - `--http.corsdomain "*"`: Allows CORS from any origin
 
 ### 3. Start the Faucet Application
@@ -61,7 +63,7 @@ npm run dev
 
 The application will be available at `http://localhost:5173`
 
-## 🛠️ Usage
+## Usage
 
 1. **Enter Recipient**: 
    - **Ethereum Address**: Input a valid Ethereum address (0x...)
@@ -73,7 +75,6 @@ The application will be available at `http://localhost:5173`
 3. **Select Amount**: Use the slider to choose between 0.1 and 10 ETH
 4. **Configure RPC** (Optional): Click the settings ⚙️ button to customize RPC endpoint
 5. **Send ETH**: Click the "Send ETH" button to initiate the transaction
-6. **Celebrate**: Watch the confetti animation on successful transactions! 🎉
 
 ### ENS Examples to Try
 - `vitalik.eth` - Vitalik Buterin's ENS
@@ -82,50 +83,12 @@ The application will be available at `http://localhost:5173`
 - Any other .eth domain you know!
 
 ### RPC Configuration
+
 - Click the ⚙️ settings icon in the top-right corner
 - Customize the host and port for your geth instance
 - Default: `localhost:8545`
 - Supports any host/port combination
-
-## 🏗️ Technology Stack
-
-- **Frontend Framework**: React 18 with TypeScript
-- **Build Tool**: Vite
-- **UI Library**: Material-UI (MUI) v6
-- **Ethereum Library**: ethers.js v6
-- **Animations**: canvas-confetti
-- **Styling**: Material-UI theme system with custom gradients
-
-## 📁 Project Structure
-
-```
-src/
-├── components/
-│   └── FaucetApp.tsx          # Main faucet component
-├── App.tsx                    # Root application component
-├── main.tsx                   # Application entry point
-└── index.css                  # Global styles
-```
-
-### Configuration
-
-### Geth Connection
-
-The application connects to `http://localhost:8545` by default for local transactions. For ENS resolution, it uses Cloudflare's public Ethereum RPC endpoint to access mainnet ENS data.
-
-If you need to use a different local endpoint, modify the provider URL in `src/components/FaucetApp.tsx`:
-
-```typescript
-const provider = new ethers.JsonRpcProvider('http://your-endpoint:port')
-```
-
-### ENS Resolution
-
-ENS names are resolved using Ethereum mainnet data through Cloudflare's public RPC. The app fetches:
-- **Address Resolution**: Converts .eth names to Ethereum addresses
-- **Avatar Images**: ENS profile pictures
-- **Display Names**: Human-readable names
-- **Descriptions**: Profile descriptions
+- Use HTTPS if your geth instance supports it
 
 ### Transaction Settings
 
@@ -134,7 +97,7 @@ ENS names are resolved using Ethereum mainnet data through Cloudflare's public R
 - **Gas**: Automatically estimated by ethers.js
 - **ENS Support**: Mainnet ENS resolution with local transaction execution
 
-## 🔧 Development
+## Development
 
 ### Available Scripts
 
@@ -143,13 +106,7 @@ ENS names are resolved using Ethereum mainnet data through Cloudflare's public R
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint
 
-### Development Tips
-
-1. Keep your geth instance running while developing
-2. Use the browser's developer tools to monitor network requests
-3. Check the console for detailed transaction logs
-
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -172,40 +129,13 @@ ENS names are resolved using Ethereum mainnet data through Cloudflare's public R
 - **"Network error"**: Check your internet connection and try again. The app uses multiple fallback RPC providers.
 - **ENS name not found**: Verify the .eth domain exists and is properly configured.
 
-### Logs and Debugging
 
-The application logs detailed information to the browser console. Open Developer Tools (F12) to view:
-- Transaction details
-- Network connection status
-- Error messages and stack traces
 
-## 📄 License
+## License
 
 This project is open source and available under the [MIT License](LICENSE).
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
----
-
-**Note**: This faucet is designed for development purposes only. Do not use with real mainnet ETH or in production environments.
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```

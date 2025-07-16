@@ -20,8 +20,25 @@ import {
   DialogContent,
   DialogActions,
   Tooltip,
+  FormControlLabel,
+  Switch,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material'
-import { WaterDrop, Send, Cable, Person, Search, Settings, Save, RestartAlt } from '@mui/icons-material'
+import { 
+  WaterDrop, 
+  Send, 
+  Cable, 
+  Person, 
+  Search, 
+  Settings, 
+  Save, 
+  RestartAlt,
+  ContentCopy,
+  CheckCircle,
+} from '@mui/icons-material'
 import confetti from 'canvas-confetti'
 import { ethers } from 'ethers'
 
@@ -44,24 +61,122 @@ const FaucetApp: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<TransactionResult | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [chainId, setChainId] = useState<number | null>(null)
+  const [networkName, setNetworkName] = useState<string | null>(null)
+  const [isTestingConnection, setIsTestingConnection] = useState(true)
   const [ensProfile, setEnsProfile] = useState<ENSProfile | null>(null)
   const [isResolvingENS, setIsResolvingENS] = useState(false)
   const [ensError, setEnsError] = useState<string | null>(null)
   
-  // RPC Settings
-  const [rpcHost, setRpcHost] = useState('localhost')
-  const [rpcPort, setRpcPort] = useState('8545')
+  // RPC Settings with localStorage persistence
+  const [rpcHost, setRpcHost] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('faucet-rpc-host') || 'localhost'
+    }
+    return 'localhost'
+  })
+  const [rpcPort, setRpcPort] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('faucet-rpc-port') || '8545'
+    }
+    return '8545'
+  })
+  const [useHttps, setUseHttps] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('faucet-use-https') === 'true'
+    }
+    return false
+  })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [tempRpcHost, setTempRpcHost] = useState('localhost')
   const [tempRpcPort, setTempRpcPort] = useState('8545')
+  const [tempUseHttps, setTempUseHttps] = useState(false)
+  const [copySuccess, setCopySuccess] = useState(false)
   
   // Get current RPC URL
-  const getRpcUrl = () => `http://${rpcHost}:${rpcPort}`
+  const getRpcUrl = useCallback(() => {
+    const protocol = useHttps ? 'https' : 'http'
+    const portSuffix = rpcPort ? `:${rpcPort}` : ''
+    return `${protocol}://${rpcHost}${portSuffix}`
+  }, [useHttps, rpcPort, rpcHost])
+
+  // Check if running in production environment
+  const isProductionEnv = () => {
+    if (typeof window === 'undefined') return false
+    return window.location.hostname !== 'localhost' && 
+           window.location.hostname !== '127.0.0.1' &&
+           !window.location.hostname.includes('192.168.') &&
+           !window.location.hostname.includes('10.') &&
+           !window.location.hostname.includes('172.')
+  }
+
+  // Check if using localhost RPC in production
+  const isLocalhostInProduction = () => {
+    return isProductionEnv() && (rpcHost === 'localhost' || rpcHost === '127.0.0.1')
+  }
+
+  // Copy geth command to clipboard
+  const copyGethCommand = async () => {
+    const command = 'geth --dev --http --http.api eth,web3,dev --http.corsdomain "*"'
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy: ', err)
+    }
+  }
+
+  // Test RPC connection
+  const testConnection = useCallback(async () => {
+    setIsTestingConnection(true)
+    setIsConnected(false)
+    setChainId(null)
+    setNetworkName(null)
+
+    try {
+      const provider = new ethers.JsonRpcProvider(getRpcUrl())
+      
+      // Test connection with timeout
+      const network = await Promise.race([
+        provider.getNetwork(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 5000)
+        )
+      ])
+
+      if (network) {
+        setIsConnected(true)
+        setChainId(Number(network.chainId))
+        
+        // Map chain ID to network name
+        const chainIdToName: Record<number, string> = {
+          1: 'Ethereum Mainnet',
+          11155111: 'Sepolia Testnet',
+          5: 'Goerli Testnet',
+          1337: 'Local Geth Dev',
+          31337: 'Hardhat Local',
+          80001: 'Polygon Mumbai',
+          421614: 'Arbitrum Sepolia',
+          11155420: 'Optimism Sepolia',
+          84532: 'Base Sepolia'
+        }
+        
+        setNetworkName(chainIdToName[Number(network.chainId)] || `Chain ${network.chainId}`)
+      }
+    } catch (error) {
+      console.log('Connection test failed:', error)
+      setIsConnected(false)
+    } finally {
+      setIsTestingConnection(false)
+    }
+  }, [getRpcUrl])
 
   // Settings functions
   const handleSettingsOpen = () => {
     setTempRpcHost(rpcHost)
     setTempRpcPort(rpcPort)
+    setTempUseHttps(useHttps)
     setSettingsOpen(true)
   }
 
@@ -72,13 +187,81 @@ const FaucetApp: React.FC = () => {
   const handleSettingsSave = () => {
     setRpcHost(tempRpcHost)
     setRpcPort(tempRpcPort)
-    setIsConnected(false) // Reset connection status
+    setUseHttps(tempUseHttps)
+    
+    // Persist settings to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('faucet-rpc-host', tempRpcHost)
+      localStorage.setItem('faucet-rpc-port', tempRpcPort)
+      localStorage.setItem('faucet-use-https', tempUseHttps.toString())
+    }
+    
+    // Connection will be tested automatically via useEffect
     setSettingsOpen(false)
   }
 
   const handleSettingsReset = () => {
     setTempRpcHost('localhost')
     setTempRpcPort('8545')
+    setTempUseHttps(false)
+  }
+
+  // Preset configurations
+  const handlePresetSelect = (preset: string) => {
+    switch (preset) {
+      case 'localhost':
+        setTempRpcHost('localhost')
+        setTempRpcPort('8545')
+        setTempUseHttps(false)
+        break
+      case 'sepolia':
+        setTempRpcHost('sepolia.infura.io/v3/YOUR_PROJECT_ID')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      case 'sepolia-public':
+        setTempRpcHost('rpc.sepolia.org')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      case 'goerli':
+        setTempRpcHost('goerli.infura.io/v3/YOUR_PROJECT_ID')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      case 'goerli-public':
+        setTempRpcHost('rpc.goerli.mudit.blog')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      case 'polygon-mumbai':
+        setTempRpcHost('polygon-mumbai.infura.io/v3/YOUR_PROJECT_ID')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      case 'polygon-mumbai-public':
+        setTempRpcHost('rpc.ankr.com/polygon_mumbai')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      case 'arbitrum-sepolia':
+        setTempRpcHost('sepolia-rollup.arbitrum.io/rpc')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      case 'optimism-sepolia':
+        setTempRpcHost('sepolia.optimism.io')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      case 'base-sepolia':
+        setTempRpcHost('sepolia.base.org')
+        setTempRpcPort('')
+        setTempUseHttps(true)
+        break
+      default:
+        break
+    }
   }
 
   // Validate Ethereum address
@@ -212,6 +395,11 @@ const FaucetApp: React.FC = () => {
     }
   }, [address])
 
+  // Test connection on page load and when RPC settings change
+  useEffect(() => {
+    testConnection()
+  }, [testConnection])
+
   // Handle address input change
   const handleAddressChange = (value: string) => {
     setAddress(value)
@@ -313,10 +501,8 @@ const FaucetApp: React.FC = () => {
       // The default account should have the private key available
       const signer = await provider.getSigner(0)
       
-      // Check connection
+      // Check connection  
       const network = await provider.getNetwork()
-      setIsConnected(true)
-      
       console.log('Connected to network:', network.name, 'Chain ID:', network.chainId)
 
       // Prepare transaction
@@ -348,7 +534,25 @@ const FaucetApp: React.FC = () => {
       
     } catch (error) {
       console.error('Transaction error:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Transaction failed. Make sure geth is running locally on port 8545.'
+      
+      let errorMessage = 'Transaction failed'
+      
+      if (error instanceof Error) {
+        if (error.message.includes('fetch') || error.message.includes('network')) {
+          if (isLocalhostInProduction()) {
+            errorMessage = 'Cannot connect to localhost from production site. Please configure a public testnet in settings ⚙️ or run the app locally.'
+          } else if (rpcHost === 'localhost') {
+            errorMessage = 'Cannot connect to local geth instance. Make sure geth is running with: geth --dev --http --http.api eth,web3,dev --http.corsdomain "*"'
+          } else {
+            errorMessage = `Cannot connect to RPC endpoint: ${getRpcUrl()}. Check your network connection and RPC configuration.`
+          }
+        } else if (error.message.includes('insufficient funds')) {
+          errorMessage = 'Insufficient funds in the connected account. For testnets, get ETH from a faucet first.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       setResult({
         success: false,
         message: errorMessage,
@@ -402,13 +606,77 @@ const FaucetApp: React.FC = () => {
         <Typography variant="h6" color="text.secondary">
           Get free ETH for development on your local testnet
         </Typography>
-        <Box sx={{ mt: 2 }}>
+        <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+          {/* Connection Status Badge */}
           <Chip
-            icon={<Cable />}
-            label={isConnected ? `Connected to ${rpcHost}:${rpcPort}` : `Not Connected (${rpcHost}:${rpcPort})`}
-            color={isConnected ? 'success' : 'warning'}
+            icon={isTestingConnection ? <CircularProgress size={16} color="inherit" /> : <Cable />}
+            label={
+              isTestingConnection ? 
+                'Testing connection...' :
+                isConnected ? 
+                  `Connected • ${networkName || 'Unknown Network'}${chainId ? ` (${chainId})` : ''}` :
+                  `Not Connected • ${rpcHost}${rpcPort ? `:${rpcPort}` : ''}`
+            }
+            color={isTestingConnection ? 'default' : isConnected ? 'success' : 'warning'}
             variant="outlined"
+            sx={{ maxWidth: '400px' }}
           />
+          
+          {/* Geth Launch Instructions - Only show for localhost when not connected */}
+          {!isConnected && !isTestingConnection && (rpcHost === 'localhost' || rpcHost === '127.0.0.1') && (
+            <Alert severity="info" sx={{ mt: 1, maxWidth: 600 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                🚀 <strong>Start your local geth instance:</strong>
+              </Typography>
+              <Box sx={{ 
+                bgcolor: 'rgba(0, 0, 0, 0.1)',
+                p: 1.5,
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                fontSize: '0.85rem',
+                position: 'relative',
+                mt: 1
+              }}>
+                <Typography component="pre" sx={{ 
+                  m: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all'
+                }}>
+                  geth --dev --http --http.api eth,web3,dev --http.corsdomain "*"
+                </Typography>
+                <Tooltip title={copySuccess ? "Copied!" : "Copy command"}>
+                  <IconButton
+                    onClick={copyGethCommand}
+                    sx={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      color: copySuccess ? 'primary.main' : 'text.secondary',
+                      '&:hover': { color: 'primary.main' },
+                    }}
+                    size="small"
+                  >
+                    {copySuccess ? <CheckCircle fontSize="small" /> : <ContentCopy fontSize="small" />}
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Alert>
+          )}
+          
+          {/* Production Warning */}
+          {isLocalhostInProduction() && (
+            <Alert severity="warning" sx={{ mt: 1, maxWidth: 600 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                ⚠️ <strong>Production Warning:</strong> You're trying to use localhost RPC on a production site. This won't work due to browser security restrictions.
+              </Typography>
+              <Typography variant="body2">
+                <strong>Solutions:</strong><br />
+                🔧 Click the ⚙️ settings button to configure a public testnet (Sepolia, Arbitrum, etc.)<br />
+                💻 Or run this app locally on localhost for development<br />
+                🌐 For production demos, use testnet RPC endpoints
+              </Typography>
+            </Alert>
+          )}
         </Box>
       </Box>
 
@@ -610,7 +878,7 @@ const FaucetApp: React.FC = () => {
       </Card>
 
       {/* Settings Modal */}
-      <Dialog open={settingsOpen} onClose={handleSettingsClose} maxWidth="sm" fullWidth>
+      <Dialog open={settingsOpen} onClose={handleSettingsClose} maxWidth="md" fullWidth>
         <DialogTitle sx={{ 
           display: 'flex', 
           alignItems: 'center', 
@@ -619,12 +887,55 @@ const FaucetApp: React.FC = () => {
           color: 'white'
         }}>
           <Settings />
-          RPC Settings
+          Network & RPC Settings
         </DialogTitle>
         <DialogContent sx={{ pt: 3, mt: 5, mb: 2 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Configure the RPC endpoint for your local geth instance. Default is localhost:8545.
+            Configure your RPC endpoint. Use localhost for local development or select a testnet for production demos.
           </Typography>
+          
+          {/* Network Presets */}
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel>Network Presets</InputLabel>
+            <Select
+              value=""
+              label="Network Presets"
+              onChange={(e) => handlePresetSelect(e.target.value)}
+            >
+              <MenuItem value="localhost">🏠 Local Geth (localhost:8545)</MenuItem>
+              
+              {/* Ethereum Testnets */}
+              <MenuItem value="sepolia">🌐 Sepolia Testnet (Infura)</MenuItem>
+              <MenuItem value="sepolia-public">🌐 Sepolia Testnet (Public RPC)</MenuItem>
+              <MenuItem value="goerli">🌐 Goerli Testnet (Infura)</MenuItem>
+              <MenuItem value="goerli-public">🌐 Goerli Testnet (Public RPC)</MenuItem>
+              
+              {/* Layer 2 Testnets */}
+              <MenuItem value="arbitrum-sepolia">⚡ Arbitrum Sepolia</MenuItem>
+              <MenuItem value="optimism-sepolia">🔴 Optimism Sepolia</MenuItem>
+              <MenuItem value="base-sepolia">🔵 Base Sepolia</MenuItem>
+              
+              {/* Polygon */}
+              <MenuItem value="polygon-mumbai">🔷 Polygon Mumbai (Infura)</MenuItem>
+              <MenuItem value="polygon-mumbai-public">🔷 Polygon Mumbai (Public RPC)</MenuItem>
+            </Select>
+          </FormControl>
+          
+          {/* Manual Configuration */}
+          <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+            Manual Configuration
+          </Typography>
+          
+          <FormControlLabel
+            control={
+              <Switch
+                checked={tempUseHttps}
+                onChange={(e) => setTempUseHttps(e.target.checked)}
+              />
+            }
+            label="Use HTTPS"
+            sx={{ mb: 2 }}
+          />
           
           <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
             <TextField
@@ -632,23 +943,29 @@ const FaucetApp: React.FC = () => {
               value={tempRpcHost}
               onChange={(e) => setTempRpcHost(e.target.value)}
               fullWidth
-              placeholder="localhost"
-              helperText="Hostname or IP address"
+              placeholder="localhost or your-rpc-provider.com"
+              helperText="Hostname, IP address, or full RPC URL"
             />
             <TextField
               label="Port"
               value={tempRpcPort}
               onChange={(e) => setTempRpcPort(e.target.value)}
-              type="number"
               sx={{ minWidth: 120 }}
               placeholder="8545"
-              helperText="Port number"
+              helperText="Leave empty for default"
             />
           </Box>
           
-          <Alert severity="info" sx={{ mt: 2 }}>
+          <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
             <Typography variant="body2">
-              <strong>Current URL:</strong> {`http://${tempRpcHost}:${tempRpcPort}`}
+              <strong>Preview URL:</strong> {`${tempUseHttps ? 'https' : 'http'}://${tempRpcHost}${tempRpcPort ? `:${tempRpcPort}` : ''}`}
+            </Typography>
+          </Alert>
+
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              <strong>Production Note:</strong> Localhost connections only work when running locally. 
+              For production demos, use public testnets like Sepolia or Goerli.
             </Typography>
           </Alert>
         </DialogContent>
@@ -658,7 +975,7 @@ const FaucetApp: React.FC = () => {
             startIcon={<RestartAlt />}
             variant="outlined"
           >
-            Reset to Default
+            Reset to Localhost
           </Button>
           <Button onClick={handleSettingsClose}>
             Cancel
@@ -679,6 +996,20 @@ const FaucetApp: React.FC = () => {
           ✨ <strong>ENS Support:</strong> You can enter .eth domain names like "vitalik.eth" <br />
           The faucet will automatically resolve them and show profile information
         </Typography>
+
+        {/* Testnet Info */}
+        {rpcHost !== 'localhost' && (
+          <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              <strong>Using Public Testnet:</strong> This faucet can only send funds if you have ETH in your connected account.
+            </Typography>
+            <Typography variant="body2">
+              For testnet ETH, visit: <br />
+              • Sepolia: <a href="https://sepoliafaucet.com" target="_blank" rel="noopener">sepoliafaucet.com</a> <br />
+              • Goerli: <a href="https://goerlifaucet.com" target="_blank" rel="noopener">goerlifaucet.com</a>
+            </Typography>
+          </Alert>
+        )}
         
         {/* Code Block */}
         <Box sx={{ 
@@ -696,7 +1027,7 @@ const FaucetApp: React.FC = () => {
             mb: 1,
             fontWeight: 600
           }}>
-            🚀 Start your local geth instance:
+            🚀 {rpcHost === 'localhost' ? 'Start your local geth instance:' : 'For local development:'}
           </Typography>
           
           <Box sx={{ 
@@ -712,21 +1043,41 @@ const FaucetApp: React.FC = () => {
               lineHeight: 1.5,
               color: '#e6edf3',
               whiteSpace: 'pre-wrap',
-              wordBreak: 'break-all'
+              wordBreak: 'break-all',
+              pr: 6 // Make space for copy button
             }}>
               <Box component="span" sx={{ color: '#f85149' }}>geth</Box>{' '}
               <Box component="span" sx={{ color: '#79c0ff' }}>--dev</Box>{' '}
               <Box component="span" sx={{ color: '#79c0ff' }}>--http</Box>{' '}
               <Box component="span" sx={{ color: '#79c0ff' }}>--http.api</Box>{' '}
-              <Box component="span" sx={{ color: '#a5d6ff' }}>eth,web3,personal</Box>{' '}
+              <Box component="span" sx={{ color: '#a5d6ff' }}>eth,web3,dev</Box>{' '}
               <Box component="span" sx={{ color: '#79c0ff' }}>--http.corsdomain</Box>{' '}
               <Box component="span" sx={{ color: '#a5d6ff' }}>"*"</Box>
             </Typography>
             
-            {/* Copy button would go here in a real implementation */}
+            {/* Copy Button */}
+            <Tooltip title={copySuccess ? "Copied!" : "Copy command"}>
+              <IconButton
+                onClick={copyGethCommand}
+                sx={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  color: copySuccess ? '#58a6ff' : '#7d8590',
+                  '&:hover': {
+                    color: '#58a6ff',
+                    backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                  },
+                }}
+                size="small"
+              >
+                {copySuccess ? <CheckCircle fontSize="small" /> : <ContentCopy fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+            
             <Box sx={{
               position: 'absolute',
-              top: 8,
+              bottom: 8,
               right: 8,
               opacity: 0.7,
               fontSize: '0.7rem',
