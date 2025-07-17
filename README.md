@@ -1,6 +1,10 @@
 # Geth Dev Faucet
 
-A beautiful and modern Go-Ethereum faucet application built with React, TypeScript, Material-UI, and Vite. This tool allows you to easily distribute ETH from your local geth development instance to any Ethereum address.
+A Go-Ethereum faucet application built with React, TypeScript, Material-UI, and Vite. This tool allows you to easily distribute ETH from your local geth development instance to any Ethereum address.
+
+Why did I build this?
+- **Local Development**: Simplifies testing and development with a local geth instance.
+- **ENS Support**: Allows sending ETH to ENS names, resolving them automatically (I'm too lazy to copy-paste addresses).
 
 <table>
   <tr>

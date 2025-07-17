@@ -667,7 +667,7 @@ const FaucetApp: React.FC = () => {
           {isLocalhostInProduction() && (
             <Alert severity="warning" sx={{ mt: 1, maxWidth: 600 }}>
               <Typography variant="body2" sx={{ mb: 1 }}>
-                ⚠️ <strong>Production Warning:</strong> You're trying to use localhost RPC on a production site. This won't work due to browser security restrictions.
+             <strong>Production Warning:</strong> You're trying to use localhost RPC on a production site. This won't work due to browser security restrictions.
               </Typography>
               <Typography variant="body2">
                 <strong>Solutions:</strong><br />
